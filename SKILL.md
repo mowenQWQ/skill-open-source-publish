@@ -1,7 +1,7 @@
 ---
 name: skill-open-source-publish
 description: "Turn a task outcome or incident postmortem into an open-source agent skill and publish to GitHub + Gitee — desensitization, bilingual README (Chinese first), repo creation, token-safe pushing, cross-platform verification, release asset management, live-document merging and multi-repo routing. Use when the user says "make this a skill and open-source it", "publish to GitHub", "sync to Gitee", or asks to check cross-platform repo differences. 关键词：开源发布、双平台同步、脱敏、技能打包。Keywords: open-source publishing, GitHub Gitee sync, desensitization, skill packaging, release assets"
-version: "1.0.1"
+version: "1.1.0"
 ---
 
 # Skill 开源发布流程
@@ -28,6 +28,11 @@ version: "1.0.1"
    - ⚠️ **raw.githubusercontent.com 有CDN缓存，刚push拉raw可能拿到旧版**——不能据此判断"没推上"
    - 正确做法：查 commits API（`/repos/{owner}/{repo}/commits?path=文件`）看提交时间，或 raw URL 加 `?nocache=$(date +%s)` 穿透缓存
 6. **建议用户设置**：Topics（ai-agents、llm-safety 等精准词+skill等泛词）、仓库描述（双语）
+7. **发布后必须更新主页自述文件**（2026-09-07 起强制）：
+   - 每次发布新 skill/项目后，把新仓库加入**同名主页仓库**的 skill 列表（`{owner}/{owner}` 仓库 README，渲染到个人主页），并同步更新件套数（如"十四件套"→"十五件套"）
+   - 中英两个语言区都要加：中文表格加一行 + 英文表格加一行 + 各自末尾的汇总句同步数字
+   - 两平台都要推：GitHub `{owner}/{owner}` + Gitee `{owner}/{owner}`，内容逐字节一致
+   - **验证**：匿名 raw 拉取（raw 有 CDN 缓存，加 `?nocache=$(date +%s)` 穿透）或带 token 的 contents API 解码检查，确认新仓库名出现在自述里
 
 ## 双平台发布（GitHub + Gitee 同步）
 
@@ -73,3 +78,6 @@ version: "1.0.1"
 - 2026-09-04：银狐 GitHub 仓库（SilverFox-Detector，08-25 建）存在但档案只记了 Gitee → 误判"没发过"。档案缺失≠事情没发生，"有没有做过 X"类事实判断先查平台 API
 - 2026-09-04：元模式——**跨平台做同一件事，先假设两边语义不一致**（GitHub JSON 语义套 Gitee 表单、GitHub raw 验证套 Gitee raw 403 都是这根因），双平台任务分别验证
 - 2026-09-07（三平台发布一次通，3 个新 skill）：① **Gitee POST /user/repos 即使 JSON body 显式 `private:false` 仍建出私有**（此前"JSON body 即可避免"失效）——建仓后必须逐库匿名 HTTP 200 验证（403=私有），再用 PATCH（**必带 name**）改 public；② **Gitee git push URL 不认 `x-access-token:` 前缀**——会报 `The token username invalid` 403，必须 `https://<username>:<token>@gitee.com/...`；③ ClawHub 新发布走 moderation `pending.publication`，search 暂时查不到、但 `inspect @owner/slug` 能看到状态，CLEAN 后自动公开（属预期，勿判失败）
+
+## 更新日志
+- v1.1.0（2026-09-07）：执行步骤新增第 7 条「发布后必须更新主页自述文件」——发布后把新仓库加进同名主页仓库 skill 列表（中英双语区同步 + 件套数 + 双平台推送 + raw/API 验证）。来源：发布 agent-self-rollback 后用户提醒"自述文件更新没，记得把规则加进习惯"。
