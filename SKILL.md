@@ -1,7 +1,7 @@
 ---
 name: skill-open-source-publish
 description: "Turn a task outcome or incident postmortem into an open-source agent skill and publish to GitHub + Gitee — desensitization, bilingual README (Chinese first), repo creation, token-safe pushing, cross-platform verification, release asset management, live-document merging and multi-repo routing. Use when the user says "make this a skill and open-source it", "publish to GitHub", "sync to Gitee", or asks to check cross-platform repo differences. 关键词：开源发布、双平台同步、脱敏、技能打包。Keywords: open-source publishing, GitHub Gitee sync, desensitization, skill packaging, release assets"
-version: "1.0.0"
+version: "1.0.1"
 ---
 
 # Skill 开源发布流程
@@ -72,3 +72,4 @@ version: "1.0.0"
 - 2026-09-04：cp -r src/. dst/ 覆盖 .git → "nothing to commit" 假象，差点误判"已更新"。更新远端仓库一律 rsync --exclude='.git'，推完查 commits API 确认
 - 2026-09-04：银狐 GitHub 仓库（SilverFox-Detector，08-25 建）存在但档案只记了 Gitee → 误判"没发过"。档案缺失≠事情没发生，"有没有做过 X"类事实判断先查平台 API
 - 2026-09-04：元模式——**跨平台做同一件事，先假设两边语义不一致**（GitHub JSON 语义套 Gitee 表单、GitHub raw 验证套 Gitee raw 403 都是这根因），双平台任务分别验证
+- 2026-09-07（三平台发布一次通，3 个新 skill）：① **Gitee POST /user/repos 即使 JSON body 显式 `private:false` 仍建出私有**（此前"JSON body 即可避免"失效）——建仓后必须逐库匿名 HTTP 200 验证（403=私有），再用 PATCH（**必带 name**）改 public；② **Gitee git push URL 不认 `x-access-token:` 前缀**——会报 `The token username invalid` 403，必须 `https://<username>:<token>@gitee.com/...`；③ ClawHub 新发布走 moderation `pending.publication`，search 暂时查不到、但 `inspect @owner/slug` 能看到状态，CLEAN 后自动公开（属预期，勿判失败）
