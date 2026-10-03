@@ -1,7 +1,7 @@
 ---
 name: skill-open-source-publish
 description: "Turn a task outcome or incident postmortem into an open-source agent skill and publish to GitHub + Gitee — desensitization, bilingual README (Chinese first), repo creation, token-safe pushing, cross-platform verification, release asset management, live-document merging and multi-repo routing. Use when the user says "make this a skill and open-source it", "publish to GitHub", "sync to Gitee", or asks to check cross-platform repo differences. 关键词：开源发布、双平台同步、脱敏、技能打包。Keywords: open-source publishing, GitHub Gitee sync, desensitization, skill packaging, release assets"
-version: "1.2.0"
+version: "1.2.1"
 ---
 
 # Skill 开源发布流程
@@ -36,7 +36,7 @@ version: "1.2.0"
 
 ## 双平台发布（GitHub + Gitee 同步）
 
-1. **建仓**：GitHub `POST /user/repos`（JSON body）；Gitee `POST /api/v5/user/repos` —— ⚠️ **布尔字段必须走 JSON body**，表单传字符串 `"false"` 会被后端当真值 → 仓库全私有（2026-09-04 实测 5 库全中招）。★ **Gitee 新建空仓库无论如何改不成公开**——PATCH `private:false` 会报 `{"error":{"base":["空仓库不支持设置为公开仓库"]}}`（JSON 里显式 false 也没用）。**正解：先把内容 push 上去，再 PATCH 改公开**（PATCH 必须带 `name`，token 可走 JSON body 的 `access_token`）；改完必须匿名 HTTP 200 复核（2026-10-04 实测）
+1. **建仓**：GitHub `POST /user/repos`（JSON body）；Gitee `POST /api/v5/user/repos` —— ⚠️ **布尔字段必须走 JSON body**，表单传字符串 `"false"` 会被后端当真值 → 仓库全私有（2026-09-04 实测 5 库全中招）。★ **Gitee 新建空仓库无论如何改不成公开**——PATCH `private:false` 会报 `{"error":{"base":["空仓库不支持设置为公开仓库"]}}`（JSON 里显式 false 也没用）。**正解：先把内容 push 上去，再 PATCH 改公开**（PATCH 必须带 `name`，token 可走 JSON body 的 `access_token`）；改完必须匿名 HTTP 200 复核。**判据是「仓库是否为空」，不是「等几分钟」——受控实验：空仓等 1 分钟再 PATCH 仍报同样错，有内容则立刻成功**（2026-10-04 实测）
 2. **推送**：令牌走环境变量 + 一次性 URL `https://x-access-token:$GH_TOKEN@github.com/...`（不设 remote，避免令牌落盘 .git/config）；curl 建仓响应不回显原文
 3. **更新已有远端仓库**：clone 到临时目录后 `rsync -a --exclude='.git' src/ dst/` —— **`cp -r src/. dst/` 会连 .git 覆盖 clone 历史**，产生 "nothing to commit" 假象（本地看着干净，远程实际没收到更新）
 4. **Gitee 改仓库属性**（如 private→public）：PATCH `/api/v5/repos/{owner}/{repo}` **必须带 `name` 字段**否则 400 "name is missing"；布尔同样走 JSON
@@ -82,7 +82,9 @@ version: "1.2.0"
 - 2026-09-07（三平台发布一次通，3 个新 skill）：① **Gitee POST /user/repos 即使 JSON body 显式 `private:false` 仍建出私有**（此前"JSON body 即可避免"失效）——建仓后必须逐库匿名 HTTP 200 验证（403=私有），再用 PATCH（**必带 name**）改 public；② **Gitee git push URL 不认 `x-access-token:` 前缀**——会报 `The token username invalid` 403，必须 `https://<username>:<token>@gitee.com/...`；③ ClawHub 新发布走 moderation `pending.publication`，search 暂时查不到、但 `inspect @owner/slug` 能看到状态，CLEAN 后自动公开（属预期，勿判失败）
 
 - 2026-10-04：**Gitee 空仓库不能设公开**——建仓后立刻 `private:false` 报「空仓库不支持设置为公开仓库」，正解是先 push 再改（已升为双平台发布第 1 条的硬规则）。同日：Gitee raw 不跟重定向会拿到 HTML 存根、首页仓库默认分支是 `main` 非 `master`（已入第 12/13 条）
+- 2026-10-04（★ 元教训·归因错误）：本 skill 早前把「Gitee 建仓后改公开失败」归因为**时机**，记成「报 422，隔几分钟重试」。本次受控实验证伪：真因是**仓库为空**（空仓 PATCH 恒报「空仓库不支持设置为公开仓库」，等 1 分钟无用；有内容则立刻成功）。**「重试一下就好了」类经验极可能是错误归因**——真正变的那个变量（内容、缓存、上游部署）常没被看见。写踩坑记录时，先问「这次和上次，到底哪个变量不同」，别把"碰巧凑效"固化成规则
 
 ## 更新日志
+- v1.2.1（2026-10-04）：**更正一处归因错误**——把"Gitee 空仓库改公开失败"的真因坐实为「仓库为空」（受控实验：空仓等待仍失败、有内容立刻成功），推翻此前"报 422 隔几分钟重试"的时机归因；补一条元教训（"重试就好了"多属错误归因）。第 1 条补判据。
 - v1.2.0（2026-10-04）：**补 Gitee 三处平台差异**——① 空仓库无法直接设公开（必须先 push 再 PATCH）；② raw 需 `curl -L` 跟重定向否则拿到 HTML 存根；③ contents API 的 branch 要按各仓库 `default_branch`（主页仓库为 `main`）。来源：开源 nginx-watchdog 时的实测。
 - v1.1.0（2026-09-07）：执行步骤新增第 7 条「发布后必须更新主页自述文件」——发布后把新仓库加进同名主页仓库 skill 列表（中英双语区同步 + 件套数 + 双平台推送 + raw/API 验证）。来源：发布 agent-self-rollback 后用户提醒"自述文件更新没，记得把规则加进习惯"。
