@@ -1,7 +1,7 @@
 ---
 name: skill-open-source-publish
 description: "Turn a task outcome or incident postmortem into an open-source agent skill and publish to GitHub + Gitee — desensitization, bilingual README (Chinese first), repo creation, token-safe pushing, cross-platform verification, release asset management, live-document merging and multi-repo routing. Use when the user says "make this a skill and open-source it", "publish to GitHub", "sync to Gitee", or asks to check cross-platform repo differences. 关键词：开源发布、双平台同步、脱敏、技能打包。Keywords: open-source publishing, GitHub Gitee sync, desensitization, skill packaging, release assets"
-version: "1.1.0"
+version: "1.2.0"
 ---
 
 # Skill 开源发布流程
@@ -36,7 +36,7 @@ version: "1.1.0"
 
 ## 双平台发布（GitHub + Gitee 同步）
 
-1. **建仓**：GitHub `POST /user/repos`（JSON body）；Gitee `POST /api/v5/user/repos` —— ⚠️ **布尔字段必须走 JSON body**，表单传字符串 `"false"` 会被后端当真值 → 仓库全私有（2026-09-04 实测 5 库全中招）
+1. **建仓**：GitHub `POST /user/repos`（JSON body）；Gitee `POST /api/v5/user/repos` —— ⚠️ **布尔字段必须走 JSON body**，表单传字符串 `"false"` 会被后端当真值 → 仓库全私有（2026-09-04 实测 5 库全中招）。★ **Gitee 新建空仓库无论如何改不成公开**——PATCH `private:false` 会报 `{"error":{"base":["空仓库不支持设置为公开仓库"]}}`（JSON 里显式 false 也没用）。**正解：先把内容 push 上去，再 PATCH 改公开**（PATCH 必须带 `name`，token 可走 JSON body 的 `access_token`）；改完必须匿名 HTTP 200 复核（2026-10-04 实测）
 2. **推送**：令牌走环境变量 + 一次性 URL `https://x-access-token:$GH_TOKEN@github.com/...`（不设 remote，避免令牌落盘 .git/config）；curl 建仓响应不回显原文
 3. **更新已有远端仓库**：clone 到临时目录后 `rsync -a --exclude='.git' src/ dst/` —— **`cp -r src/. dst/` 会连 .git 覆盖 clone 历史**，产生 "nothing to commit" 假象（本地看着干净，远程实际没收到更新）
 4. **Gitee 改仓库属性**（如 private→public）：PATCH `/api/v5/repos/{owner}/{repo}` **必须带 `name` 字段**否则 400 "name is missing"；布尔同样走 JSON
@@ -47,6 +47,8 @@ version: "1.1.0"
 9. **Release 附件管理**（2026-09-05 实战）：附件 id 要走 `GET /repos/{owner}/{repo}/releases/{id}/attach_files`（详情/列表 API 的 assets 字段不含 id）；删除附件 `DELETE .../attach_files/{attach_id}`；上传 `POST .../attach_files` **不认 `application/octet-stream`，用 multipart `-F 'file=@xxx'`**
 10. **大文件双平台推送防 504**：5MB+ 附件上传 / 7MB+ contents API PUT，Gitee 侧带宽极慢（~13KB/s 级），前台等必被网关超时杀——一律 `setsid nohup ... & ` 后台跑 + flag 文件轮询（实测 5-7MB 各约 3 分钟）
 11. **发布文件名去中文**：Release 资产与仓库内文件名用纯 ASCII（如 `bountifulfares-1.3.0-1.20.1.jar`），下载链接稳定、跨平台兼容；中文描述放 Release 说明里
+12. **Gitee raw 必须跟随重定向（`curl -L`）**：`gitee.com/{o}/{r}/raw/{branch}/{file}` 对脚本/文本类文件会返回一个 HTML 存根（`<a href="https://raw.giteeusercontent.com/...">Found</a>`），不加 `-L` 就会把几百字节的存根当真内容，误判"两平台内容不一致"。GitHub raw 无此问题（2026-10-04 实测）
+13. **Gitee contents API 的 `branch` 要对**：各自仓库默认分支可能不同（如主页仓库 `mowenqwq/mowenqwq` 默认是 `main` 不是 `master`），PUT 传错分支名报 404 `{"message":"branch"}`。改前先 `GET /repos/{o}/{r}` 读 `default_branch`
 
 ## 活文档维护（分叉合流 + 导航层 + 多库路由）
 
@@ -79,5 +81,8 @@ version: "1.1.0"
 - 2026-09-04：元模式——**跨平台做同一件事，先假设两边语义不一致**（GitHub JSON 语义套 Gitee 表单、GitHub raw 验证套 Gitee raw 403 都是这根因），双平台任务分别验证
 - 2026-09-07（三平台发布一次通，3 个新 skill）：① **Gitee POST /user/repos 即使 JSON body 显式 `private:false` 仍建出私有**（此前"JSON body 即可避免"失效）——建仓后必须逐库匿名 HTTP 200 验证（403=私有），再用 PATCH（**必带 name**）改 public；② **Gitee git push URL 不认 `x-access-token:` 前缀**——会报 `The token username invalid` 403，必须 `https://<username>:<token>@gitee.com/...`；③ ClawHub 新发布走 moderation `pending.publication`，search 暂时查不到、但 `inspect @owner/slug` 能看到状态，CLEAN 后自动公开（属预期，勿判失败）
 
+- 2026-10-04：**Gitee 空仓库不能设公开**——建仓后立刻 `private:false` 报「空仓库不支持设置为公开仓库」，正解是先 push 再改（已升为双平台发布第 1 条的硬规则）。同日：Gitee raw 不跟重定向会拿到 HTML 存根、首页仓库默认分支是 `main` 非 `master`（已入第 12/13 条）
+
 ## 更新日志
+- v1.2.0（2026-10-04）：**补 Gitee 三处平台差异**——① 空仓库无法直接设公开（必须先 push 再 PATCH）；② raw 需 `curl -L` 跟重定向否则拿到 HTML 存根；③ contents API 的 branch 要按各仓库 `default_branch`（主页仓库为 `main`）。来源：开源 nginx-watchdog 时的实测。
 - v1.1.0（2026-09-07）：执行步骤新增第 7 条「发布后必须更新主页自述文件」——发布后把新仓库加进同名主页仓库 skill 列表（中英双语区同步 + 件套数 + 双平台推送 + raw/API 验证）。来源：发布 agent-self-rollback 后用户提醒"自述文件更新没，记得把规则加进习惯"。
